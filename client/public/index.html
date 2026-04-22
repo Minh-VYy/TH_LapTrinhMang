@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>MultiChat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0b0b14;--bg2:#10101e;--bg3:#16162a;
+      --surface:#1a1a30;--surface2:#20203a;
+      --border:#2a2a48;--border2:#35355a;
+      --accent:#7b85ff;--accent2:#c084fc;
+      --accent-glow:rgba(123,133,255,.22);--accent-dim:rgba(123,133,255,.12);
+      --gold:#f5c842;--green:#4ade80;--red:#ff6b8a;
+      --text:#eeeeff;--text2:#9090bb;--text3:#555580;
+      --bubble-me:#272060;--bubble-me-b:#4a44a8;
+      --bubble-them:#1a1a30;--bubble-them-b:#2d2d50;
+      --radius:14px;--radius-sm:8px;--sidebar-w:252px;
+      --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+      --ease-out:cubic-bezier(.16,1,.3,1);
+      --ease-spring:cubic-bezier(.34,1.56,.64,1);
+    }
+    html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--text)}
+    ::-webkit-scrollbar{width:4px}
+    ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+
+    /* ── Layout ── */
+    #app{display:flex;height:100vh;overflow:hidden}
+
+    /* ── Sidebar ── */
+    #sidebar{
+      width:var(--sidebar-w);min-width:var(--sidebar-w);
+      background:var(--bg2);border-right:1px solid var(--border);
+      display:flex;flex-direction:column;z-index:10
+    }
+    #brand{
+      padding:18px 16px 14px;display:flex;align-items:center;gap:10px;
+      border-bottom:1px solid var(--border)
+    }
+    #brand-icon{
+      width:34px;height:34px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+      border-radius:9px;display:grid;place-items:center;font-size:17px;flex-shrink:0;
+      box-shadow:0 0 14px var(--accent-glow)
+    }
+    #brand-name{font-size:15px;font-weight:600;letter-spacing:-.3px}
+    #brand-sub{font-size:10px;color:var(--text3);font-family:var(--mono)}
+
+    #search-wrap{padding:10px 10px;border-bottom:1px solid var(--border)}
+    #search{
+      width:100%;background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);
+      font-size:12px;padding:7px 10px 7px 28px;outline:none;
+      transition:border-color .2s;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%23555580' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:9px center
+    }
+    #search:focus{border-color:var(--accent)}
+    #search::placeholder{color:var(--text3)}
+
+    .nav-section{overflow-y:auto;padding:6px 0}
+    .nav-section.rooms{flex:0 0 auto;border-bottom:1px solid var(--border)}
+    .nav-section.users{flex:1}
+    .section-head{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:7px 12px 3px;font-size:10px;font-weight:600;
+      letter-spacing:.8px;text-transform:uppercase;color:var(--text3);user-select:none
+    }
+    .section-count{
+      background:var(--surface2);color:var(--text2);font-size:10px;
+      padding:1px 6px;border-radius:99px
+    }
+    .nav-row{
+      display:flex;align-items:center;gap:9px;padding:6px 10px;
+      margin:1px 5px;border-radius:var(--radius-sm);cursor:pointer;
+      transition:background .14s;position:relative;user-select:none
+    }
+    .nav-row:hover{background:var(--surface)}
+    .nav-row.active{background:var(--accent-dim);box-shadow:inset 2px 0 0 var(--accent)}
+    .nav-avatar{
+      width:32px;height:32px;border-radius:50%;display:grid;place-items:center;
+      font-size:13px;font-weight:700;flex-shrink:0;position:relative
+    }
+    .nav-avatar .dot{
+      position:absolute;bottom:0;right:0;width:8px;height:8px;
+      background:var(--green);border:2px solid var(--bg2);border-radius:50%
+    }
+    .nav-info{flex:1;min-width:0}
+    .nav-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .nav-sub{font-size:11px;color:var(--text3);margin-top:1px}
+    .nav-badge{
+      background:var(--red);color:#fff;font-size:10px;font-weight:700;
+      min-width:17px;height:17px;border-radius:99px;display:grid;place-items:center;
+      padding:0 4px;flex-shrink:0;animation:badge-pop .25s var(--ease-spring)
+    }
+    @keyframes badge-pop{from{transform:scale(0)}to{transform:scale(1)}}
+
+    #my-profile{
+      padding:11px 13px;border-top:1px solid var(--border);
+      display:flex;align-items:center;gap:10px;background:var(--bg)
+    }
+    #my-av{
+      width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+      font-weight:700;font-size:14px;position:relative;flex-shrink:0
+    }
+    #my-av .dot{
+      position:absolute;bottom:0;right:0;width:9px;height:9px;
+      background:var(--green);border:2px solid var(--bg);border-radius:50%
+    }
+    #my-name{font-size:13px;font-weight:600}
+    #my-status{font-size:11px;color:var(--text3)}
+
+    /* ── Main ── */
+    #main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+
+    #chat-header{
+      padding:0 20px;height:60px;border-bottom:1px solid var(--border);
+      display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+      background:rgba(11,11,20,.85);backdrop-filter:blur(10px)
+    }
+    #chat-title-wrap{display:flex;align-items:center;gap:11px}
+    #chat-room-av{
+      width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+      font-size:14px;font-weight:700;flex-shrink:0
+    }
+    #chat-room-name{font-size:14px;font-weight:600}
+    #chat-room-sub{font-size:11px;color:var(--text3);margin-top:1px}
+    #chat-typing-h{font-size:11px;color:var(--accent);min-height:15px;font-style:italic}
+
+    #msgs-wrap{flex:1;overflow-y:auto;padding:16px 0 6px;scroll-behavior:smooth}
+    #msgs{display:flex;flex-direction:column;gap:2px;padding:0 16px;min-height:100%;justify-content:flex-end}
+
+    .date-sep{
+      display:flex;align-items:center;gap:10px;padding:12px 0 5px;
+      font-size:10px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px
+    }
+    .date-sep::before,.date-sep::after{content:'';flex:1;height:1px;background:var(--border)}
+
+    .sys-msg{
+      text-align:center;font-size:11px;color:var(--text3);padding:6px 0;
+      display:flex;align-items:center;justify-content:center
+    }
+    .sys-msg span{
+      background:var(--surface);border:1px solid var(--border);
+      border-radius:99px;padding:2px 13px
+    }
+
+    .msg-row{display:flex;gap:9px;padding:2px 0;animation:msg-in .2s var(--ease-out)}
+    @keyframes msg-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+    .msg-row.me{flex-direction:row-reverse}
+    .msg-row.grouped .msg-av{visibility:hidden}
+    .msg-av{
+      width:32px;height:32px;border-radius:50%;display:grid;place-items:center;
+      font-size:12px;font-weight:700;flex-shrink:0;align-self:flex-end
+    }
+    .msg-content{max-width:min(460px,70%);display:flex;flex-direction:column;gap:2px}
+    .msg-row.me .msg-content{align-items:flex-end}
+    .msg-sender{font-size:10px;font-weight:600;color:var(--accent);padding:0 3px;margin-bottom:1px}
+    .msg-row.me .msg-sender,.msg-row.grouped .msg-sender{display:none}
+    .bubble{
+      display:inline-block;padding:8px 12px;border-radius:15px;
+      font-size:13.5px;line-height:1.5;word-break:break-word;white-space:pre-wrap
+    }
+    .msg-row:not(.me) .bubble{
+      background:var(--bubble-them);border:1px solid var(--bubble-them-b);
+      border-bottom-left-radius:4px;color:var(--text)
+    }
+    .msg-row.me .bubble{
+      background:var(--bubble-me);border:1px solid var(--bubble-me-b);
+      border-bottom-right-radius:4px;color:var(--text)
+    }
+    .msg-row:not(.me).grouped .bubble,.msg-row:not(.me):not(.grouped) .bubble{border-bottom-left-radius:4px}
+    .msg-row.me.grouped .bubble,.msg-row.me:not(.grouped) .bubble{border-bottom-right-radius:4px}
+    .msg-time{font-size:10px;color:var(--text3);padding:0 3px;font-family:var(--mono)}
+
+    #typing-bar{
+      padding:0 16px 6px;min-height:24px;display:flex;align-items:center;gap:6px;
+      font-size:11px;color:var(--accent);font-style:italic
+    }
+    .typing-dots{display:flex;gap:3px;align-items:center}
+    .typing-dot{
+      width:4px;height:4px;background:var(--accent);border-radius:50%;
+      animation:dot-b .9s infinite
+    }
+    .typing-dot:nth-child(2){animation-delay:.15s}
+    .typing-dot:nth-child(3){animation-delay:.3s}
+    @keyframes dot-b{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-4px);opacity:1}}
+
+    #input-bar{
+      padding:11px 16px;border-top:1px solid var(--border);
+      background:var(--bg2);display:flex;gap:9px;align-items:flex-end
+    }
+    #input-wrap{
+      flex:1;background:var(--surface);border:1px solid var(--border);
+      border-radius:11px;display:flex;align-items:flex-end;gap:7px;padding:8px 11px;
+      transition:border-color .2s,box-shadow .2s
+    }
+    #input-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+    #msg-input{
+      flex:1;background:transparent;border:none;color:var(--text);
+      font-family:var(--font);font-size:13.5px;resize:none;outline:none;
+      max-height:120px;min-height:22px;line-height:1.5
+    }
+    #msg-input::placeholder{color:var(--text3)}
+    #send-btn{
+      width:36px;height:36px;
+      background:linear-gradient(135deg,var(--accent),var(--accent2));
+      border:none;border-radius:9px;color:#fff;cursor:pointer;
+      display:grid;place-items:center;flex-shrink:0;
+      transition:transform .15s var(--ease-spring),box-shadow .15s,opacity .15s;
+      font-size:17px;line-height:1
+    }
+    #send-btn:hover{transform:scale(1.06);box-shadow:0 4px 14px var(--accent-glow)}
+    #send-btn:active{transform:scale(.94)}
+    #send-btn:disabled{opacity:.3;cursor:not-allowed;transform:none}
+
+    /* ── Login overlay ── */
+    #login-overlay{
+      position:fixed;inset:0;background:var(--bg);
+      display:flex;align-items:center;justify-content:center;z-index:1000;
+      transition:opacity .35s,visibility .35s
+    }
+    #login-overlay.hidden{opacity:0;visibility:hidden;pointer-events:none}
+    #login-card{
+      background:var(--bg2);border:1px solid var(--border);border-radius:20px;
+      padding:42px 42px 34px;width:380px;max-width:calc(100vw - 32px);
+      box-shadow:0 40px 80px rgba(0,0,0,.6),0 0 50px var(--accent-glow);
+      animation:card-in .45s var(--ease-out)
+    }
+    @keyframes card-in{from{opacity:0;transform:translateY(28px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+    #login-logo{font-size:38px;display:block;filter:drop-shadow(0 0 10px var(--accent-glow));margin-bottom:4px}
+    #login-title{
+      font-size:24px;font-weight:600;letter-spacing:-.5px;margin-bottom:4px;
+      background:linear-gradient(90deg,var(--text),var(--accent));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent
+    }
+    #login-sub{font-size:12px;color:var(--text3);margin-bottom:26px}
+    .fg{margin-bottom:13px}
+    .fl{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:5px}
+    .fi{
+      width:100%;background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);
+      font-size:13.5px;padding:10px 13px;outline:none;transition:border-color .2s,box-shadow .2s
+    }
+    .fi:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+    .fi::placeholder{color:var(--text3)}
+    #login-hint{font-size:11px;color:var(--text3);margin-bottom:18px;font-family:var(--mono);line-height:1.5}
+    #login-hint strong{color:var(--accent)}
+    #login-btn{
+      width:100%;padding:12px;
+      background:linear-gradient(135deg,var(--accent),var(--accent2));
+      border:none;border-radius:var(--radius-sm);color:#fff;
+      font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;
+      transition:transform .15s var(--ease-spring),box-shadow .2s,opacity .15s;
+      box-shadow:0 4px 18px var(--accent-glow);margin-bottom:9px
+    }
+    #login-btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px var(--accent-glow)}
+    #login-btn:active{transform:translateY(0)}
+    #login-btn:disabled{opacity:.5;cursor:wait;transform:none}
+    #login-err{font-size:12px;color:var(--red);text-align:center;min-height:17px}
+
+    /* Empty state */
+    .empty-state{
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      height:100%;gap:8px;color:var(--text3)
+    }
+    .empty-state .es-icon{font-size:44px;margin-bottom:6px}
+    .empty-state h3{font-size:15px;font-weight:500;color:var(--text2)}
+    .empty-state p{font-size:12px}
+
+    /* Responsive */
+    @media(max-width:600px){
+      #sidebar{position:absolute;left:-100%;transition:left .3s var(--ease-out);height:100%;box-shadow:none}
+      #sidebar.open{left:0;box-shadow:4px 0 20px rgba(0,0,0,.5)}
+      #menu-btn{display:grid!important}
+    }
+    #menu-btn{
+      display:none;width:32px;height:32px;border:1px solid var(--border);
+      background:var(--surface);border-radius:var(--radius-sm);color:var(--text2);
+      place-items:center;cursor:pointer;font-size:15px;flex-shrink:0
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── SIDEBAR ─────────────────────────────────── -->
+  <aside id="sidebar">
+    <div id="brand">
+      <div id="brand-icon">⬡</div>
+      <div>
+        <div id="brand-name">MultiChat</div>
+        <div id="brand-sub">Java WebSocket</div>
+      </div>
+    </div>
+
+    <div id="search-wrap">
+      <input id="search" type="text" placeholder="Tìm người dùng..." autocomplete="off"/>
+    </div>
+
+    <div class="nav-section rooms">
+      <div class="section-head">Phòng chat</div>
+      <div id="rooms-list">
+        <div class="nav-row active" data-room="global" onclick="App.switchRoom('global')">
+          <div class="nav-avatar" style="background:rgba(245,200,66,.15);color:var(--gold);font-size:17px">⊕</div>
+          <div class="nav-info">
+            <div class="nav-name"># Phòng chung</div>
+            <div class="nav-sub">Mọi người</div>
+          </div>
+          <div id="badge-global" class="nav-badge" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-section users">
+      <div class="section-head">
+        Trực tuyến
+        <span class="section-count" id="online-count">0</span>
+      </div>
+      <div id="users-list"></div>
+    </div>
+
+    <div id="my-profile">
+      <div id="my-av"><div class="dot"></div></div>
+      <div>
+        <div id="my-name">Chưa đăng nhập</div>
+        <div id="my-status">● online</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ────────────────────────────────────── -->
+  <main id="main">
+    <div id="chat-header">
+      <div id="chat-title-wrap">
+        <button id="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+        <div id="chat-room-av" style="background:rgba(245,200,66,.15);color:var(--gold)">⊕</div>
+        <div>
+          <div id="chat-room-name"># Phòng chung</div>
+          <div id="chat-room-sub">Nơi mọi người gặp nhau</div>
+        </div>
+      </div>
+      <div id="chat-typing-h"></div>
+    </div>
+
+    <div id="msgs-wrap">
+      <div id="msgs">
+        <div class="empty-state">
+          <div class="es-icon">💬</div>
+          <h3>Chào mừng đến MultiChat</h3>
+          <p>Đăng nhập để bắt đầu trò chuyện</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="typing-bar"></div>
+
+    <div id="input-bar">
+      <div id="input-wrap">
+        <textarea id="msg-input" rows="1" placeholder="Nhắn tin... (Enter để gửi, Shift+Enter xuống dòng)" disabled></textarea>
+      </div>
+      <button id="send-btn" disabled>↑</button>
+    </div>
+  </main>
+
+</div>
+
+<!-- ── LOGIN ───────────────────────────────────── -->
+<div id="login-overlay">
+  <div id="login-card">
+    <span id="login-logo">⬡</span>
+    <div id="login-title">MultiChat</div>
+    <div id="login-sub">Chat realtime · Java WebSocket Server</div>
+
+    <div class="fg">
+      <label class="fl">Địa chỉ Server (WebSocket)</label>
+      <input class="fi" id="inp-server" type="text" placeholder="ws://localhost:8080" value="ws://localhost:8080"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Tên hiển thị</label>
+      <input class="fi" id="inp-user" type="text" placeholder="Nhập tên..." maxlength="24" autocomplete="off"/>
+    </div>
+
+    <div id="login-hint">
+      Khi deploy lên cloud, đổi thành<br/>
+      <strong>wss://your-app.onrender.com</strong>
+    </div>
+
+    <button id="login-btn" onclick="App.login()">Vào phòng chat →</button>
+    <div id="login-err"></div>
+  </div>
+</div>
+
+<script>
+  'use strict';
+  const App = (() => {
+    // ── State ──────────────────────────────────────────────────────
+    let ws        = null;
+    let me        = null;
+    let room      = 'global';
+    let allUsers  = [];
+    let unread    = {};
+    let typing    = {};       // roomKey → Set<name>
+    let typingTm  = {};
+    let history   = {};       // roomKey → [msg]
+    let lastSndr  = {};       // roomKey → string
+    let myTyping  = false;
+    let myTypTm   = null;
+
+    // ── DOM ────────────────────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    const D = {
+      overlay  : $('login-overlay'),
+      inpServer: $('inp-server'),
+      inpUser  : $('inp-user'),
+      loginBtn : $('login-btn'),
+      loginErr : $('login-err'),
+      usersList: $('users-list'),
+      onlineCnt: $('online-count'),
+      msgs     : $('msgs'),
+      msgsWrap : $('msgs-wrap'),
+      msgInput : $('msg-input'),
+      sendBtn  : $('send-btn'),
+      roomName : $('chat-room-name'),
+      roomSub  : $('chat-room-sub'),
+      roomAv   : $('chat-room-av'),
+      typingH  : $('chat-typing-h'),
+      typingBar: $('typing-bar'),
+      myAv     : $('my-av'),
+      myName   : $('my-name'),
+      search   : $('search'),
+      badgeGlb : $('badge-global'),
+    };
+
+    // ── Color ──────────────────────────────────────────────────────
+    const COLORS=[['#1a1a3f','#7b85ff'],['#1f1430','#c084fc'],['#0f2020','#4ade80'],
+      ['#2a1010','#ff6b8a'],['#1a2020','#38bdf8'],['#2a1a10','#fb923c'],
+      ['#1a2a10','#a3e635'],['#2a0a2a','#e879f9']];
+    const clr = n => COLORS[Math.abs([...n].reduce((a,c)=>a+c.charCodeAt(0),0))%COLORS.length];
+
+    // ── Time ───────────────────────────────────────────────────────
+    const fmtTime = iso => {
+      try { return new Date(iso).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'}); }
+      catch{ return iso||''; }
+    };
+    const fmtDate = iso => {
+      try {
+        const d=new Date(iso), now=new Date();
+        if(d.toDateString()===now.toDateString()) return 'Hôm nay';
+        const y=new Date(now); y.setDate(now.getDate()-1);
+        if(d.toDateString()===y.toDateString()) return 'Hôm qua';
+        return d.toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit',year:'numeric'});
+      } catch{ return ''; }
+    };
+
+    const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const rKey = r => r==='global'?'global':r;
+
+    // ── Render sidebar ─────────────────────────────────────────────
+    function renderUsers(q='') {
+      const filt = allUsers.filter(u=>u.toLowerCase().includes(q.toLowerCase())&&u!==me);
+      D.onlineCnt.textContent = allUsers.filter(u=>u!==me).length;
+      D.usersList.innerHTML = '';
+      if(!filt.length){
+        D.usersList.innerHTML=`<div style="padding:10px 13px;font-size:11px;color:var(--text3)">Chưa có ai online...</div>`;
+        return;
+      }
+      filt.forEach(u=>{
+        const [bg,fg]=clr(u);
+        const active=room===u;
+        const badge=unread[u]||0;
+        const row=document.createElement('div');
+        row.className='nav-row'+(active?' active':'');
+        row.dataset.user=u;
+        row.innerHTML=`
+          <div class="nav-avatar" style="background:${bg};color:${fg}">
+            ${esc(u[0].toUpperCase())}<div class="dot"></div>
+          </div>
+          <div class="nav-info">
+            <div class="nav-name">${esc(u)}</div>
+            <div class="nav-sub">● online</div>
+          </div>
+          ${badge?`<div class="nav-badge">${badge>9?'9+':badge}</div>`:''}`;
+        row.addEventListener('click',()=>switchRoom(u));
+        D.usersList.appendChild(row);
+      });
+    }
+
+    // ── Render header ──────────────────────────────────────────────
+    function renderHeader(){
+      if(room==='global'){
+        D.roomAv.textContent='⊕';
+        D.roomAv.style.cssText='background:rgba(245,200,66,.15);color:var(--gold);width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:16px;flex-shrink:0';
+        D.roomName.textContent='# Phòng chung';
+        D.roomSub.textContent=`${allUsers.filter(u=>u!==me).length} người online`;
+      } else {
+        const [bg,fg]=clr(room);
+        D.roomAv.textContent=room[0].toUpperCase();
+        D.roomAv.style.cssText=`background:${bg};color:${fg};width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:700;flex-shrink:0`;
+        D.roomName.textContent=room;
+        D.roomSub.textContent='● Trò chuyện riêng';
+      }
+    }
+
+    // ── Render messages ────────────────────────────────────────────
+    function renderMsgs(){
+      D.msgs.innerHTML='';
+      const key=rKey(room);
+      const list=history[key]||[];
+      if(!list.length){ showEmpty(); return; }
+
+      let lastDate=null, lastS=null;
+      list.forEach(msg=>{
+        // Date sep
+        const ds=fmtDate(msg.at||msg.timestamp||new Date().toISOString());
+        if(ds!==lastDate){
+          const sep=document.createElement('div');
+          sep.className='date-sep';sep.textContent=ds;
+          D.msgs.appendChild(sep);
+          lastDate=ds;lastS=null;
+        }
+        if(msg.type==='SYSTEM'||msg.type==='sys'){
+          appendSys(msg.content);lastS=null;return;
+        }
+        const grouped=lastS===msg.sender;
+        lastS=msg.sender;
+        D.msgs.appendChild(buildBubble(msg,grouped));
+      });
+      scrollBot();
+    }
+
+    function showEmpty(){
+      if(room==='global'){
+        D.msgs.innerHTML=`<div class="empty-state"><div class="es-icon">🌐</div><h3>Phòng chung</h3><p>Chưa có tin nhắn nào. Hãy bắt đầu!</p></div>`;
+      } else {
+        const [bg,fg]=clr(room);
+        D.msgs.innerHTML=`<div class="empty-state">
+          <div style="width:52px;height:52px;border-radius:50%;background:${bg};color:${fg};display:grid;place-items:center;font-size:20px;font-weight:700;margin-bottom:8px">${esc(room[0].toUpperCase())}</div>
+          <h3>${esc(room)}</h3><p>Bắt đầu cuộc trò chuyện riêng</p></div>`;
+      }
+    }
+
+    function buildBubble(msg,grouped){
+      const isMine=msg.sender===me;
+      const row=document.createElement('div');
+      row.className=`msg-row${isMine?' me':''}${grouped?' grouped':''}`;
+
+      // Avatar
+      const [bg,fg]=clr(msg.sender);
+      const av=document.createElement('div');
+      av.className='msg-av';
+      av.style.cssText=`background:${bg};color:${fg}`;
+      av.textContent=msg.sender[0].toUpperCase();
+      row.appendChild(av);
+
+      // Content
+      const ct=document.createElement('div');
+      ct.className='msg-content';
+      if(!grouped&&!isMine){
+        const sn=document.createElement('div');
+        sn.className='msg-sender';sn.textContent=msg.sender;
+        ct.appendChild(sn);
+      }
+      const b=document.createElement('div');
+      b.className='bubble';b.textContent=msg.content;
+      const t=document.createElement('div');
+      t.className='msg-time';
+      t.textContent=fmtTime(msg.at||msg.timestamp||new Date().toISOString());
+      ct.appendChild(b);ct.appendChild(t);
+      row.appendChild(ct);
+      return row;
+    }
+
+    function appendSys(text){
+      const d=document.createElement('div');
+      d.className='sys-msg';
+      d.innerHTML=`<span>${esc(text)}</span>`;
+      D.msgs.appendChild(d);
+    }
+
+    function appendLive(msg){
+      // Remove empty state
+      const es=D.msgs.querySelector('.empty-state');
+      if(es)es.remove();
+
+      const key=rKey(room);
+      if(msg.type==='SYSTEM'||msg.type==='sys'){
+        appendSys(msg.content);
+        scrollBot();lastSndr[key]=null;return;
+      }
+      const grouped=lastSndr[key]===msg.sender;
+      lastSndr[key]=msg.sender;
+      D.msgs.appendChild(buildBubble(msg,grouped));
+      scrollBot();
+    }
+
+    const scrollBot=()=>requestAnimationFrame(()=>{ D.msgsWrap.scrollTop=D.msgsWrap.scrollHeight; });
+
+    // ── Typing indicator ───────────────────────────────────────────
+    function setTyper(sender,roomId,active){
+      if(!typing[roomId])typing[roomId]=new Set();
+      const k=`${roomId}::${sender}`;
+      if(active){
+        typing[roomId].add(sender);
+        clearTimeout(typingTm[k]);
+        typingTm[k]=setTimeout(()=>{typing[roomId]?.delete(sender);renderTyping();},4000);
+      } else {
+        typing[roomId]?.delete(sender);
+      }
+      renderTyping();
+    }
+
+    function renderTyping(){
+      const key=rKey(room);
+      const set=typing[key];
+      const list=set?[...set]:[];
+      if(!list.length){D.typingBar.innerHTML='';D.typingH.textContent='';return;}
+      const names=list.slice(0,3).join(', ');
+      const txt=`${names} đang nhập...`;
+      D.typingBar.innerHTML=`<div class="typing-dots">${'<div class="typing-dot"></div>'.repeat(3)}</div><span>${esc(txt)}</span>`;
+      D.typingH.textContent=txt;
+    }
+
+    // ── Unread ─────────────────────────────────────────────────────
+    function incUnread(key){
+      unread[key]=(unread[key]||0)+1;
+      if(key==='global'){D.badgeGlb.textContent=unread[key]>9?'9+':unread[key];D.badgeGlb.style.display='grid';}
+      renderUsers(D.search.value);
+    }
+    function clearUnread(key){
+      unread[key]=0;
+      if(key==='global')D.badgeGlb.style.display='none';
+      renderUsers(D.search.value);
+    }
+
+    // ── Switch room ────────────────────────────────────────────────
+    function switchRoom(r){
+      room=r;clearUnread(rKey(r));
+      renderHeader();renderMsgs();renderTyping();
+      document.querySelectorAll('.nav-row').forEach(row=>{
+        row.classList.toggle('active',
+          (r==='global'&&row.dataset.room==='global')||row.dataset.user===r);
+      });
+      // Nếu chưa có DM history → request từ server
+      if(r!=='global'&&ws&&ws.readyState===1){
+        if(!(history[r]&&history[r].length)){
+          ws.send(JSON.stringify({type:'DM_HISTORY',sender:me,to:r,content:'',timestamp:'',id:''}));
+        }
+      }
+      D.msgInput.focus();
+      if(window.innerWidth<600)document.getElementById('sidebar').classList.remove('open');
+    }
+
+    // ── Setup profile ──────────────────────────────────────────────
+    function setupProfile(name){
+      const [bg,fg]=clr(name);
+      D.myAv.style.cssText=`background:${bg};color:${fg};width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px;position:relative;flex-shrink:0`;
+      D.myAv.innerHTML=`${esc(name[0].toUpperCase())}<div class="dot"></div>`;
+      D.myName.textContent=name;
+    }
+
+    // ── Login ──────────────────────────────────────────────────────
+    function login(){
+      const serverUrl=D.inpServer.value.trim().replace(/\/$/,'');
+      const username=D.inpUser.value.trim();
+      D.loginErr.textContent='';
+      if(!username){D.loginErr.textContent='Nhập tên hiển thị.';return;}
+      if(username.length<2){D.loginErr.textContent='Tên ít nhất 2 ký tự.';return;}
+      if(!serverUrl){D.loginErr.textContent='Nhập địa chỉ server.';return;}
+
+      D.loginBtn.disabled=true;D.loginBtn.textContent='Đang kết nối...';
+
+      try {
+        ws = new WebSocket(serverUrl);
+      } catch(e){
+        D.loginErr.textContent='Địa chỉ không hợp lệ.';
+        D.loginBtn.disabled=false;D.loginBtn.textContent='Vào phòng chat →';
+        return;
+      }
+
+      ws.onopen = () => {
+        // Gửi JOIN dưới dạng GLOBAL với content = username
+        ws.send(JSON.stringify({
+          type:'GLOBAL',sender:'',to:null,content:username,timestamp:'',id:''
+        }));
+      };
+
+      ws.onerror = () => {
+        D.loginErr.textContent='Không kết nối được server. Kiểm tra địa chỉ và server đang chạy.';
+        D.loginBtn.disabled=false;D.loginBtn.textContent='Vào phòng chat →';
+      };
+
+      ws.onmessage = (ev) => {
+        try{
+          const msg=JSON.parse(ev.data);
+          if(msg.type==='ERROR'&&!me){
+            D.loginErr.textContent=msg.content||'Lỗi kết nối.';
+            D.loginBtn.disabled=false;D.loginBtn.textContent='Vào phòng chat →';
+            ws.close();return;
+          }
+          if(msg.type==='WELCOME'){
+            me=msg.you;
+            // parse users array
+            allUsers=(msg.users||[]).filter(u=>u!==me);
+            // parse history
+            const hist=(msg.history||[]).map(m=>({...m,at:m.timestamp||m.at}));
+            history['global']=hist;
+            lastSndr['global']=hist.length?hist[hist.length-1].sender:null;
+
+            setupProfile(me);
+            D.msgInput.disabled=false;D.sendBtn.disabled=false;
+            D.overlay.classList.add('hidden');
+            renderUsers();renderMsgs();renderHeader();
+            D.msgInput.focus();
+            bindWS();
+          }
+        } catch(e){ console.error('Parse error',e,ev.data); }
+      };
+
+      ws.onclose = ()=>{
+        if(!me){ D.loginErr.textContent='Kết nối bị đóng.'; D.loginBtn.disabled=false; D.loginBtn.textContent='Vào phòng chat →'; }
+      };
+    }
+
+    // ── Bind WS events (after login) ──────────────────────────────
+    function bindWS(){
+      ws.onmessage=(ev)=>{
+        try{ handleMsg(JSON.parse(ev.data)); }
+        catch(e){ console.error(e,ev.data); }
+      };
+      ws.onclose=()=>{
+        const sys={type:'sys',content:'⚠️ Mất kết nối với server',sender:'SYSTEM',at:new Date().toISOString()};
+        pushHist('global',sys);
+        if(room==='global')appendLive(sys);
+        D.msgInput.disabled=true;D.sendBtn.disabled=true;
+      };
+    }
+
+    function handleMsg(msg){
+      switch(msg.type){
+        case 'USER_LIST':
+          allUsers=(msg.users||[]).filter(u=>u!==me);
+          renderUsers(D.search.value);renderHeader();break;
+
+        case 'SYSTEM':
+          const sys={...msg,at:msg.timestamp||new Date().toISOString()};
+          pushHist('global',sys);
+          if(room==='global')appendLive(sys);
+          break;
+
+        case 'GLOBAL':
+          const gm={...msg,at:msg.timestamp||new Date().toISOString()};
+          pushHist('global',gm);
+          if(room==='global')appendLive(gm);
+          else incUnread('global');
+          break;
+
+        case 'DM':
+          const key=msg.sender===me?msg.to:msg.sender;
+          const dm={...msg,at:msg.timestamp||new Date().toISOString()};
+          pushHist(key,dm);
+          if(room===key)appendLive(dm);
+          else incUnread(key);
+          break;
+
+        case 'DM_HISTORY':
+          const other=msg.to;
+          if(!(history[other]&&history[other].length)){
+            history[other]=(msg.messages||[]).map(m=>({...m,at:m.timestamp||m.at}));
+            lastSndr[other]=history[other].length?history[other][history[other].length-1].sender:null;
+            if(room===other)renderMsgs();
+          }
+          break;
+
+        case 'TYPING':
+          setTyper(msg.sender,msg.to||'global',true);break;
+
+        case 'TYPING_STOP':
+          setTyper(msg.sender,msg.to||'global',false);break;
+
+        case 'ERROR':
+          console.warn('Server error:',msg.content);break;
+      }
+    }
+
+    function pushHist(key,msg){
+      if(!history[key])history[key]=[];
+      history[key].push(msg);
+      if(history[key].length>500)history[key].shift();
+      if(room===key)lastSndr[key]=msg.sender;
+    }
+
+    // ── Send ───────────────────────────────────────────────────────
+    function send(){
+      if(!ws||!me||ws.readyState!==1)return;
+      const content=D.msgInput.value.trim();
+      if(!content)return;
+      D.msgInput.value='';autoResize();stopTyping();
+      if(room==='global'){
+        ws.send(JSON.stringify({type:'GLOBAL',sender:me,to:null,content,timestamp:'',id:''}));
+      } else {
+        ws.send(JSON.stringify({type:'DM',sender:me,to:room,content,timestamp:'',id:''}));
+      }
+    }
+
+    // ── Typing ─────────────────────────────────────────────────────
+    function startTyping(){
+      if(!ws||!me||myTyping)return;
+      myTyping=true;
+      ws.send(JSON.stringify({type:'TYPING',sender:me,to:room==='global'?null:room,content:'',timestamp:'',id:''}));
+    }
+    function stopTyping(){
+      if(!ws||!me||!myTyping)return;
+      myTyping=false;
+      ws.send(JSON.stringify({type:'TYPING_STOP',sender:me,to:room==='global'?null:room,content:'',timestamp:'',id:''}));
+      clearTimeout(myTypTm);
+    }
+
+    // ── Auto resize textarea ───────────────────────────────────────
+    function autoResize(){
+      D.msgInput.style.height='22px';
+      D.msgInput.style.height=Math.min(D.msgInput.scrollHeight,120)+'px';
+    }
+
+    // ── Bind UI ────────────────────────────────────────────────────
+    D.msgInput.addEventListener('input',()=>{
+      autoResize();startTyping();
+      clearTimeout(myTypTm);myTypTm=setTimeout(stopTyping,2000);
+    });
+    D.msgInput.addEventListener('keydown',e=>{
+      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}
+    });
+    D.sendBtn.addEventListener('click',send);
+    D.inpUser.addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+    D.inpServer.addEventListener('keydown',e=>{if(e.key==='Enter')D.inpUser.focus();});
+    D.search.addEventListener('input',e=>renderUsers(e.target.value));
+
+    // Random username suggestion
+    const adj=['Cool','Fast','Smart','Lucky','Happy','Bold','Calm','Brave'];
+    const noun=['Tiger','Fox','Eagle','Panda','Wolf','Bear','Hawk','Lion'];
+    D.inpUser.value=adj[Math.random()*adj.length|0]+noun[Math.random()*noun.length|0]+(Math.random()*90+10|0);
+
+    return { login, switchRoom, send };
+  })();
+</script>
+</body>
+</html>
