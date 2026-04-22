@@ -37,13 +37,11 @@ public class ChatRoom {
     // ── User management ───────────────────────────────────────────
 
     /**
-     * Đăng ký user mới. Trả về false nếu tên đã tồn tại.
+     * Đăng ký user mới. Dùng "name#id" làm key → không bao giờ trùng.
      */
-    public synchronized boolean registerUser(String username, ClientHandler handler) {
-        if (users.containsKey(username)) return false;
-        users.put(username, handler);
-        LOG.info("[JOIN] " + username + " | Online: " + users.size());
-        return true;
+    public synchronized void registerUser(String displayKey, ClientHandler handler) {
+        users.put(displayKey, handler);
+        LOG.info("[JOIN] " + displayKey + " | Online: " + users.size());
     }
 
     /**
@@ -53,13 +51,13 @@ public class ChatRoom {
      *   3. Broadcast updated user list
      */
     public void onUserJoined(ClientHandler handler) {
-        String username = handler.getUsername();
+        String displayKey = handler.getDisplayKey();
 
         // 1. Gửi WELCOME với lịch sử global
-        handler.sendRaw(buildWelcomeJson(username));
+        handler.sendRaw(buildWelcomeJson(displayKey));
 
         // 2. Broadcast JOIN notification
-        ChatMessage joinMsg = ChatMessage.system(username + " đã tham gia phòng chat 👋");
+        ChatMessage joinMsg = ChatMessage.system(handler.getUsername() + " đã tham gia phòng chat 👋");
         broadcastAll(joinMsg);
 
         // 3. Broadcast updated user list
@@ -70,12 +68,11 @@ public class ChatRoom {
      * Gọi khi user disconnect.
      */
     public void onUserLeft(ClientHandler handler) {
-        String username = handler.getUsername();
-        users.remove(username);
-        LOG.info("[LEAVE] " + username + " | Online: " + users.size());
+        String displayKey = handler.getDisplayKey();
+        users.remove(displayKey);
+        LOG.info("[LEAVE] " + displayKey + " | Online: " + users.size());
 
-        // Broadcast leave + updated list
-        broadcastAll(ChatMessage.system(username + " đã rời phòng chat 🚪"));
+        broadcastAll(ChatMessage.system(handler.getUsername() + " đã rời phòng chat 🚪"));
         broadcastUserList();
     }
 
@@ -101,25 +98,23 @@ public class ChatRoom {
      * Gửi DM giữa 2 user (chỉ tới sender + receiver).
      */
     public void sendDM(ChatMessage msg) {
-        String from = msg.getSender();
-        String to   = msg.getTo();
+        String from = msg.getSender();  // "Name#id"
+        String to   = msg.getTo();      // "Name#id"
 
-        // Lưu vào DM history
         String key = dmKey(from, to);
         dmHistory.computeIfAbsent(key, k -> new CopyOnWriteArrayList<>());
         addToHistory(dmHistory.get(key), msg, MAX_DM_HISTORY);
 
-        // Gửi cho receiver
         ClientHandler receiver = users.get(to);
         if (receiver == null) {
-            // Target offline
             ClientHandler sender = users.get(from);
-            if (sender != null) sender.send(ChatMessage.error(to + " không online."));
+            // Extract display name from key for error message
+            String toName = to.contains("#") ? to.substring(0, to.lastIndexOf('#')) : to;
+            if (sender != null) sender.send(ChatMessage.error(toName + " không online."));
             return;
         }
         receiver.send(msg);
 
-        // Gửi lại cho sender (xác nhận)
         ClientHandler sender = users.get(from);
         if (sender != null) sender.send(msg);
     }
@@ -200,18 +195,18 @@ public class ChatRoom {
 
     // ── Welcome JSON ──────────────────────────────────────────────
 
-    private String buildWelcomeJson(String forUser) {
+    private String buildWelcomeJson(String forDisplayKey) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\"type\":\"WELCOME\",\"sender\":\"SERVER\",")
-                .append("\"to\":\"").append(ChatMessage.escapeJson(forUser)).append("\",")
+                .append("\"to\":\"").append(ChatMessage.escapeJson(forDisplayKey)).append("\",")
                 .append("\"content\":\"\",\"timestamp\":\"\",\"id\":\"\",")
-                .append("\"you\":\"").append(ChatMessage.escapeJson(forUser)).append("\",")
+                .append("\"you\":\"").append(ChatMessage.escapeJson(forDisplayKey)).append("\",")
                 .append("\"users\":[");
 
-        List<String> names = new ArrayList<>(users.keySet());
-        for (int i = 0; i < names.size(); i++) {
-            sb.append("\"").append(ChatMessage.escapeJson(names.get(i))).append("\"");
-            if (i < names.size() - 1) sb.append(',');
+        List<String> keys = new ArrayList<>(users.keySet());
+        for (int i = 0; i < keys.size(); i++) {
+            sb.append("\"").append(ChatMessage.escapeJson(keys.get(i))).append("\"");
+            if (i < keys.size() - 1) sb.append(',');
         }
 
         sb.append("],\"history\":[");

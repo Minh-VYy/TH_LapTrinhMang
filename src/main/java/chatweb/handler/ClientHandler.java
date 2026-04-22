@@ -8,6 +8,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
+import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
@@ -27,6 +28,8 @@ import java.util.logging.Logger;
 public class ClientHandler implements Runnable {
 
     private static final Logger LOG = Logger.getLogger(ClientHandler.class.getName());
+    private static final int MAX_TEXT_LENGTH = 2000;
+    private static final String MEDIA_PREFIX = "__MC_MEDIA__|";
 
     // WebSocket magic GUID theo RFC 6455
     private static final String WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -37,7 +40,9 @@ public class ClientHandler implements Runnable {
     private InputStream  in;
     private OutputStream out;
 
-    private String username = null;
+    private String  username  = null;
+    /** ID ngắn 6 ký tự hex — phân biệt khi tên trùng, dùng để tô màu avatar */
+    private String  userId    = null;
     private boolean connected = false;
 
     public ClientHandler(Socket socket, ChatRoom room) {
@@ -221,46 +226,40 @@ public class ClientHandler implements Runnable {
 
     private void handleGlobal(ChatMessage msg) {
         if (username == null) {
-            // Lần đầu gửi GLOBAL → đây là lệnh JOIN
+            // Lần đầu gửi GLOBAL → lệnh JOIN
             String name = msg.getContent().trim();
             if (name.isEmpty() || name.length() > 24) {
                 sendError("Tên không hợp lệ (1–24 ký tự).");
                 return;
             }
-            if (!room.registerUser(name, this)) {
-                sendError("\"" + name + "\" đã có người dùng. Chọn tên khác.");
-                return;
-            }
+            // Tạo ID ngắn 6 ký tự — cho phép tên trùng, ID luôn khác nhau
+            this.userId   = UUID.randomUUID().toString().replace("-", "").substring(0, 6);
             this.username = name;
+            // Key trong ChatRoom = "displayName#userId" → không bao giờ trùng
+            String uniqueKey = name + "#" + userId;
+            room.registerUser(uniqueKey, this);   // luôn thành công vì UUID
             room.onUserJoined(this);
             return;
         }
         // Tin nhắn phòng chung
-        String content = msg.getContent();
+        String content = normalizeContent(msg.getContent());
         if (content == null || content.isBlank()) return;
-        content = content.trim();
-        if (content.length() > 2000) content = content.substring(0, 2000);
-        room.broadcastGlobal(ChatMessage.global(username, content));
+        room.broadcastGlobal(ChatMessage.global(getDisplayKey(), content));
     }
 
     private void handleDM(ChatMessage msg) {
         if (username == null) return;
         String to = msg.getTo();
-        String content = msg.getContent();
+        String content = normalizeContent(msg.getContent());
         if (to == null || content == null || content.isBlank()) return;
-        content = content.trim();
-        if (content.length() > 2000) content = content.substring(0, 2000);
-        room.sendDM(ChatMessage.dm(username, to, content));
+        room.sendDM(ChatMessage.dm(getDisplayKey(), to, content));
     }
 
     private void handleTyping(ChatMessage msg, boolean start) {
         if (username == null) return;
-        String target = msg.getTo(); // null = global, username = DM target
-        if (start) {
-            room.broadcastTyping(username, target);
-        } else {
-            room.broadcastTypingStop(username, target);
-        }
+        String target = msg.getTo();
+        if (start) room.broadcastTyping(getDisplayKey(), target);
+        else       room.broadcastTypingStop(getDisplayKey(), target);
     }
 
     private void handleDMHistory(ChatMessage msg) {
@@ -304,6 +303,16 @@ public class ClientHandler implements Runnable {
         send(ChatMessage.error(msg));
     }
 
+    private String normalizeContent(String content) {
+        if (content == null) return null;
+        if (content.startsWith(MEDIA_PREFIX)) return content;
+        content = content.trim();
+        if (content.length() > MAX_TEXT_LENGTH) {
+            content = content.substring(0, MAX_TEXT_LENGTH);
+        }
+        return content;
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Cleanup
     // ─────────────────────────────────────────────────────────────
@@ -319,10 +328,13 @@ public class ClientHandler implements Runnable {
                 socket.close();
             }
         } catch (Exception ignored) {}
-        LOG.info("Disconnected: " + (username != null ? username : socket.getRemoteSocketAddress()));
+        LOG.info("Disconnected: " + (username != null ? getDisplayKey() : socket.getRemoteSocketAddress()));
     }
 
     // ── Getters ───────────────────────────────────────────────────
-    public String  getUsername()  { return username; }
-    public boolean isConnected()  { return connected; }
+    public String  getUsername()   { return username; }
+    public String  getUserId()     { return userId; }
+    /** "Name#id6" — key dùng trong ChatRoom và hiển thị cho client */
+    public String  getDisplayKey() { return username + "#" + userId; }
+    public boolean isConnected()   { return connected; }
 }

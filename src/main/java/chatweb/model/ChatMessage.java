@@ -1,7 +1,8 @@
 package chatweb.model;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.ZoneOffset;
 
 /**
  * ChatMessage — đối tượng tin nhắn truyền giữa server và clients.
@@ -22,7 +23,7 @@ public class ChatMessage {
     }
 
     private static final DateTimeFormatter FMT =
-            DateTimeFormatter.ofPattern("HH:mm");
+            DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
     private Type   type;
     private String sender;
@@ -41,7 +42,7 @@ public class ChatMessage {
         this.sender    = sender;
         this.to        = to;
         this.content   = content;
-        this.timestamp = LocalDateTime.now().format(FMT);
+        this.timestamp = OffsetDateTime.now(ZoneOffset.ofHours(7)).format(FMT);
         this.id        = id != null ? id : generateId();
     }
 
@@ -65,6 +66,9 @@ public class ChatMessage {
 
     public static ChatMessage typing(String sender, String room) {
         ChatMessage m = new ChatMessage(Type.TYPING, sender, room, "", null);
+        if (m.timestamp == null || m.timestamp.isBlank()) {
+            m.timestamp = OffsetDateTime.now(ZoneOffset.ofHours(7)).format(FMT);
+        }
         return m;
     }
 
@@ -106,7 +110,6 @@ public class ChatMessage {
     }
 
     private static String extractStr(String json, String key) {
-        String pattern = "\"" + key + "\"\\s*:\\s*";
         int idx = json.indexOf("\"" + key + "\"");
         if (idx < 0) return null;
         int colon = json.indexOf(':', idx);
