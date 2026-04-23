@@ -472,13 +472,8 @@
     /* ── RESPONSIVE ── */
     @media(max-width:700px){
       #app{height:100dvh}
-      #mobile-menu-bar{
-        display:flex;align-items:center;gap:10px;
-        height:56px;padding:0 10px;
-        border-bottom:1px solid var(--brd);
-        background:rgba(9,9,15,.92);backdrop-filter:blur(20px);
-        position:sticky;top:0;z-index:35;flex-shrink:0;
-      }
+      /* Dùng riêng `#chat-header` trên mobile để tránh hiển thị 2 thanh menu */
+      #mobile-menu-bar{display:none}
       #mobile-menu-btn{
         width:40px;height:40px;border-radius:var(--r-sm);
         display:grid;place-items:center;font-size:18px;
@@ -491,7 +486,7 @@
       .mobile-members-btn{width:40px;height:40px}
       #chat-header{
         height:54px;padding:0 10px;
-        position:sticky;top:56px;z-index:30;
+        position:sticky;top:0;z-index:35;
         background:rgba(9,9,15,.88);
       }
       #sidebar{
